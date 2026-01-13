@@ -1,60 +1,46 @@
-import { useEffect } from 'react';
-import { TopNav } from '@/components/TopNavigation/TopNav';
-import { Sidebar } from '@/components/Sidebar/Sidebar';
-import { WorkflowCanvas } from '@/components/WorkflowCanvas/WorkflowCanvas';
-import { ConfigPanel } from '@/components/ConfigurationPanel/ConfigPanel';
-import { useWorkflowStore } from '@/store/workflowStore';
-import { useStorageStore } from '@/store/storageStore';
-import { useUIStore } from '@/store/uiStore';
-import { useAutoSave } from '@/hooks/useAutoSave';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { Login } from '@/pages/Login';
+import { Signup } from '@/pages/Signup';
+import { EditorPage } from '@/pages/EditorPage';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { useAuthStore } from '@/store/authStore';
 
 function App() {
-  const { setWorkflow } = useWorkflowStore();
-  const { loadDraft, hasDraft } = useStorageStore();
-  const activeTab = useUIStore((state) => state.activeTab);
-
-  // Load workflow from localStorage on mount
-  useEffect(() => {
-    if (hasDraft()) {
-      const draft = loadDraft();
-      if (draft) {
-        setWorkflow(draft);
-      }
-    }
-  }, [hasDraft, loadDraft, setWorkflow]);
-
-  // Enable auto-save
-  useAutoSave(3000);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
 
   return (
-    <div className="flex flex-col h-screen">
-      <TopNav />
+    <BrowserRouter>
+      <Routes>
+        {/* Redirect root to login or editor based on auth status */}
+        <Route
+          path="/"
+          element={
+            isAuthenticated ? (
+              <Navigate to="/editor" replace />
+            ) : (
+              <Navigate to="/login" replace />
+            )
+          }
+        />
 
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        {/* Auth routes */}
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
 
-        <main className="flex-1 relative">
-          {activeTab === 'properties' && <WorkflowCanvas />}
-          {activeTab === 'json' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">JSON Editor - Coming Soon</p>
-            </div>
-          )}
-          {activeTab === 'interface' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Interface Editor - Coming Soon</p>
-            </div>
-          )}
-          {activeTab === 'variables' && (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-muted-foreground">Variables Editor - Coming Soon</p>
-            </div>
-          )}
-        </main>
-      </div>
+        {/* Protected routes */}
+        <Route
+          path="/editor"
+          element={
+            <ProtectedRoute>
+              <EditorPage />
+            </ProtectedRoute>
+          }
+        />
 
-      <ConfigPanel />
-    </div>
+        {/* Catch all - redirect to root */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </BrowserRouter>
   );
 }
 

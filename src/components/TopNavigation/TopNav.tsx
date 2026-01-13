@@ -1,16 +1,28 @@
-import { Play, Save, FileJson, Settings, Variable, Layout } from 'lucide-react';
+import { Play, Save, FileJson, Settings, Variable, Layout, LogOut, User } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/store/uiStore';
 import { useWorkflowStore } from '@/store/workflowStore';
 import { useStorageStore } from '@/store/storageStore';
+import { useAuthStore } from '@/store/authStore';
 import { formatDistanceToNow } from '@/utils/dateUtils';
 
 export function TopNav() {
+  const navigate = useNavigate();
   const { activeTab, setActiveTab, lastSavedAt } = useUIStore();
   const workflow = useWorkflowStore((state) => state.workflow);
   const { saveDraft, publish } = useStorageStore();
+  const { user, logout } = useAuthStore();
 
   const handleSave = () => {
     saveDraft(workflow);
@@ -19,6 +31,11 @@ export function TopNav() {
 
   const handlePublish = () => {
     publish(workflow);
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   return (
@@ -71,6 +88,31 @@ export function TopNav() {
           <Play className="h-4 w-4 mr-2" />
           Run
         </Button>
+
+        {/* User Menu */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="gap-2">
+              <User className="h-4 w-4" />
+              {user?.username}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>My Account</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled>
+              <div className="flex flex-col">
+                <span className="text-sm font-medium">{user?.username}</span>
+                <span className="text-xs text-muted-foreground">{user?.email}</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleLogout}>
+              <LogOut className="mr-2 h-4 w-4" />
+              <span>Log out</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

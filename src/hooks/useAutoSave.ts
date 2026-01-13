@@ -7,7 +7,7 @@ export function useAutoSave(interval: number = 3000) {
   const workflow = useWorkflowStore((state) => state.workflow);
   const saveDraft = useStorageStore((state) => state.saveDraft);
   const setLastSavedAt = useUIStore((state) => state.setLastSavedAt);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     // Clear existing timeout
