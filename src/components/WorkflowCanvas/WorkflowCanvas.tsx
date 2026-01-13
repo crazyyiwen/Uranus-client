@@ -31,15 +31,34 @@ function WorkflowCanvasInner() {
   const reactFlowWrapper = useRef<HTMLDivElement>(null);
   const [rfInstance, setRfInstance] = React.useState<ReactFlowInstance | null>(null);
 
-  const { nodes: storeNodes, edges: storeEdges, addNode, addEdge: addStoreEdge } = useWorkflowStore();
+  const { nodes: storeNodes, edges: storeEdges, addNode, addEdge: addStoreEdge, updateNode } = useWorkflowStore();
   const { openConfigPanel } = useUIStore();
 
-  const [nodes, setNodes, onNodesChange] = useNodesState(storeNodes);
-  const [edges, setEdges, onEdgesChange] = useEdgesState(storeEdges);
+  const [nodes, setNodes, onNodesChange] = useNodesState([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState([]);
 
-  // Sync store changes to React Flow
+  // Handle node changes and sync back to store
+  const handleNodesChange = React.useCallback((changes: any[]) => {
+    onNodesChange(changes);
+
+    // Sync position changes back to store
+    changes.forEach((change) => {
+      if (change.type === 'position' && change.position && change.dragging === false) {
+        updateNode(change.id, { position: change.position });
+      }
+    });
+  }, [onNodesChange, updateNode]);
+
+  // Sync store changes to React Flow - convert WorkflowNode to React Flow Node
   React.useEffect(() => {
-    setNodes(storeNodes as Node[]);
+    const reactFlowNodes = storeNodes.map(node => ({
+      id: node.id,
+      type: node.type,
+      position: node.position,
+      data: node, // Pass the entire node as data
+      draggable: node.deletable !== false,
+    }));
+    setNodes(reactFlowNodes as Node[]);
   }, [storeNodes, setNodes]);
 
   React.useEffect(() => {
@@ -97,7 +116,7 @@ function WorkflowCanvasInner() {
       <ReactFlow
         nodes={nodes}
         edges={edges}
-        onNodesChange={onNodesChange}
+        onNodesChange={handleNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onInit={setRfInstance}
