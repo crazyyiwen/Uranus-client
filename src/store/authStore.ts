@@ -19,6 +19,8 @@ interface AuthState {
   getCurrentUser: () => User | null;
 }
 
+const API_BASE_URL = 'http://localhost:3316';
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -26,53 +28,92 @@ export const useAuthStore = create<AuthState>()(
       isAuthenticated: false,
 
       login: async (emailOrUsername: string, password: string) => {
-        // Simulate login - check localStorage for registered users
-        const usersJson = localStorage.getItem('registered_users');
-        const users: User[] = usersJson ? JSON.parse(usersJson) : [];
+        try {
+          const response = await fetch(`${API_BASE_URL}/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username: emailOrUsername,
+              password,
+            }),
+          });
 
-        const user = users.find(
-          (u) =>
-            (u.email === emailOrUsername || u.username === emailOrUsername)
-        );
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            console.error('Login failed:', error);
+            return false;
+          }
 
-        if (user) {
-          // In production, verify password hash here
+          const data = await response.json();
+
+          // Assuming backend returns user data
+          const user: User = {
+            id: data.id || data._id || Date.now().toString(),
+            email: data.email || '',
+            username: data.username || emailOrUsername,
+            createdAt: data.createdAt || new Date().toISOString(),
+          };
+
+          // Store token if returned by backend
+          if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+          }
+
           set({ user, isAuthenticated: true });
           return true;
+        } catch (error) {
+          console.error('Login error:', error);
+          return false;
         }
-
-        return false;
       },
 
       signup: async (email: string, username: string, password: string) => {
-        // Simulate signup - store user in localStorage
-        const usersJson = localStorage.getItem('registered_users');
-        const users: User[] = usersJson ? JSON.parse(usersJson) : [];
+        try {
+          const response = await fetch(`${API_BASE_URL}/signup`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              username,
+              email,
+              password,
+            }),
+          });
 
-        // Check if email or username already exists
-        const exists = users.some(
-          (u) => u.email === email || u.username === username
-        );
+          if (!response.ok) {
+            const error = await response.json().catch(() => ({}));
+            console.error('Signup failed:', error);
+            return false;
+          }
 
-        if (exists) {
+          const data = await response.json();
+
+          const user: User = {
+            id: data.id || data._id || Date.now().toString(),
+            email: data.email || email,
+            username: data.username || username,
+            createdAt: data.createdAt || new Date().toISOString(),
+          };
+
+          // Store token if returned by backend
+          if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+          }
+
+          set({ user, isAuthenticated: true });
+          return true;
+        } catch (error) {
+          console.error('Signup error:', error);
           return false;
         }
-
-        const newUser: User = {
-          id: Date.now().toString(),
-          email,
-          username,
-          createdAt: new Date().toISOString(),
-        };
-
-        users.push(newUser);
-        localStorage.setItem('registered_users', JSON.stringify(users));
-
-        set({ user: newUser, isAuthenticated: true });
-        return true;
       },
 
       logout: () => {
+        // Remove token from localStorage
+        localStorage.removeItem('auth_token');
         set({ user: null, isAuthenticated: false });
       },
 

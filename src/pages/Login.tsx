@@ -24,10 +24,10 @@ export function Login() {
       if (success) {
         navigate('/editor');
       } else {
-        setError('Invalid email/username or password');
+        setError('Invalid username or password. Please try again or sign up for a new account.');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('Unable to connect to server. Please make sure the backend is running on http://localhost:3316');
     } finally {
       setLoading(false);
     }

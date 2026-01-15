@@ -48,10 +48,10 @@ export function Signup() {
       if (success) {
         navigate('/editor');
       } else {
-        setError('Email or username already exists');
+        setError('Email or username already exists. Please try a different one or login.');
       }
     } catch (err) {
-      setError('An error occurred. Please try again.');
+      setError('Unable to connect to server. Please make sure the backend is running on http://localhost:3316');
     } finally {
       setLoading(false);
     }

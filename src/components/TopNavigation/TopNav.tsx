@@ -1,4 +1,4 @@
-import { Play, Save, FileJson, Settings, Variable, Layout, LogOut, User } from 'lucide-react';
+import { Play, Save, FileJson, Settings, Variable, Layout, LogOut, User, Undo, Redo } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -19,18 +19,28 @@ import { formatDistanceToNow } from '@/utils/dateUtils';
 
 export function TopNav() {
   const navigate = useNavigate();
-  const { activeTab, setActiveTab, lastSavedAt } = useUIStore();
-  const workflow = useWorkflowStore((state) => state.workflow);
+  const { activeTab, setActiveTab } = useUIStore();
+  const {
+    workflow,
+    hasUnsavedChanges,
+    lastSaved,
+    undo,
+    redo,
+    canUndo,
+    canRedo,
+    markSaved,
+  } = useWorkflowStore();
   const { saveDraft, publish } = useStorageStore();
   const { user, logout } = useAuthStore();
 
   const handleSave = () => {
     saveDraft(workflow);
-    useUIStore.setState({ lastSavedAt: new Date().toISOString() });
+    markSaved();
   };
 
   const handlePublish = () => {
     publish(workflow);
+    markSaved();
   };
 
   const handleLogout = () => {
@@ -42,13 +52,16 @@ export function TopNav() {
     <div className="h-14 border-b bg-background flex items-center justify-between px-4">
       {/* Left: Workflow name and status */}
       <div className="flex items-center gap-3">
-        <h1 className="text-lg font-semibold">{workflow.displayName || 'Untitled Workflow'}</h1>
+        <h1 className="text-lg font-semibold">
+          {workflow.displayName || 'Untitled Workflow'}
+          {hasUnsavedChanges && <span className="text-red-500 ml-1">*</span>}
+        </h1>
         <Badge variant={workflow.status === 'published' ? 'default' : 'secondary'}>
           {workflow.status === 'published' ? 'Published' : 'Draft'}
         </Badge>
-        {lastSavedAt && (
+        {lastSaved && (
           <span className="text-xs text-muted-foreground">
-            Auto-saved {formatDistanceToNow(lastSavedAt)}
+            Saved {formatDistanceToNow(lastSaved.toISOString())}
           </span>
         )}
       </div>
@@ -77,6 +90,28 @@ export function TopNav() {
 
       {/* Right: Actions */}
       <div className="flex items-center gap-2">
+        {/* Undo/Redo */}
+        <div className="flex items-center gap-1 border-r pr-2 mr-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => undo()}
+            disabled={!canUndo()}
+            title="Undo (Ctrl+Z)"
+          >
+            <Undo className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => redo()}
+            disabled={!canRedo()}
+            title="Redo (Ctrl+Shift+Z)"
+          >
+            <Redo className="h-4 w-4" />
+          </Button>
+        </div>
+
         <Button variant="outline" size="sm" onClick={handleSave}>
           <Save className="h-4 w-4 mr-2" />
           Save

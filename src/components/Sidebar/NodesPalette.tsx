@@ -6,6 +6,7 @@ import {
   Globe,
   Shield,
   GitBranch,
+  GitMerge,
   Workflow,
   Variable,
   Code
@@ -79,6 +80,12 @@ export function NodesPalette() {
       label: 'Rule',
       icon: <GitBranch className="h-4 w-4" />,
       description: 'Conditional branching logic',
+    },
+    {
+      type: 'parallel',
+      label: 'Parallel',
+      icon: <GitMerge className="h-4 w-4" />,
+      description: 'Execute multiple branches concurrently',
     },
     {
       type: 'workflow',

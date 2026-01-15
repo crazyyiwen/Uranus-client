@@ -9,6 +9,7 @@ import type {
   GuardrailNodeConfig,
   RuleNodeConfig,
   WorkflowNodeConfig,
+  ParallelNodeConfig,
   VariableNodeConfig,
   ScriptNodeConfig,
 } from '@/types/node.types';
@@ -210,7 +211,8 @@ function createHTTPRequestNode(position: { x: number; y: number }): WorkflowNode
   const config: HTTPRequestNodeConfig = {
     method: 'GET',
     url: '',
-    headers: {},
+    headers: [],
+    timeout: 30000,
     queryParams: {},
     authentication: {
       type: 'none',
@@ -303,6 +305,30 @@ function createWorkflowNode(position: { x: number; y: number }): WorkflowNode {
   };
 }
 
+// Create a Parallel node
+function createParallelNode(position: { x: number; y: number }): WorkflowNode {
+  const id = uuidv4().substring(0, 7);
+  const config: ParallelNodeConfig = {
+    waitForAllBranches: true,
+    maxConcurrency: 5,
+    timeout: 60000,
+  };
+
+  return {
+    id,
+    type: 'parallel',
+    name: `parallel_${id}`,
+    description: '',
+    position,
+    deletable: true,
+    properties: defaultNodeProperties,
+    config,
+    variableUpdates: [],
+    width: 250,
+    height: 100,
+  };
+}
+
 // Create a Variable node
 function createVariableNode(position: { x: number; y: number }): WorkflowNode {
   const id = uuidv4().substring(0, 7);
@@ -370,6 +396,8 @@ export function createNodeByType(type: NodeType, position: { x: number; y: numbe
       return createRuleNode(position);
     case 'workflow':
       return createWorkflowNode(position);
+    case 'parallel':
+      return createParallelNode(position);
     case 'variable':
       return createVariableNode(position);
     case 'script':

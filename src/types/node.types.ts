@@ -74,9 +74,10 @@ export interface LLMNodeConfig {
 export interface HTTPRequestNodeConfig {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH';
   url: string;
-  headers: Record<string, string>;
+  headers: Array<{ key: string; value: string }>;
   body?: string;
   queryParams?: Record<string, string>;
+  timeout?: number;
   authentication?: {
     type: 'none' | 'bearer' | 'basic' | 'api-key';
     credentials?: Record<string, string>;
@@ -120,6 +121,13 @@ export interface OutputNodeConfig {
 export interface OutputMapping {
   type: string;
   value: string;
+}
+
+// Parallel node configuration
+export interface ParallelNodeConfig {
+  waitForAllBranches: boolean;
+  maxConcurrency: number;
+  timeout: number;
 }
 
 // Variable node configuration

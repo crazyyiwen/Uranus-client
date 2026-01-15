@@ -2,7 +2,13 @@ import { create } from 'zustand';
 import { immer } from 'zustand/middleware/immer';
 import { v4 as uuidv4 } from 'uuid';
 import type { WorkflowData, WorkflowNode, WorkflowEdge, NodeType, Variable, Tool } from '@/types/workflow.types';
+import type { ChatSession, ChatMessage, ValidationResult } from '@/types/chat.types';
 import { createEmptyWorkflow, createNodeByType } from '@/utils/nodeDefaults';
+
+interface HistoryState {
+  nodes: WorkflowNode[];
+  edges: WorkflowEdge[];
+}
 
 interface WorkflowState {
   workflow: WorkflowData;
@@ -11,12 +17,44 @@ interface WorkflowState {
   selectedNodes: string[];
   selectedEdges: string[];
 
-  // Actions
+  // Execution state
+  isExecuting: boolean;
+  executingNodes: Set<string>;
+  completedNodes: Set<string>;
+
+  // Chat sessions (persist across panel toggles)
+  chatSessions: ChatSession[];
+
+  // History for undo/redo
+  history: {
+    past: HistoryState[];
+    future: HistoryState[];
+  };
+
+  // Save state
+  saving: boolean;
+  autoSaving: boolean;
+  lastSaved: Date | null;
+  lastAutoSaved: Date | null;
+  hasUnsavedChanges: boolean;
+
+  // PP-Detail panel (property panel detail overlay)
+  isPPDetailOpen: boolean;
+  ppDetailContent: React.ReactNode | null;
+
+  // Hover state
+  hoveredNodeId: string | null;
+
+  // Validation
+  validationResult: ValidationResult | null;
+
+  // Actions - Node/Edge operations
   setWorkflow: (workflow: WorkflowData) => void;
   addNode: (type: NodeType, position: { x: number; y: number }) => void;
   updateNode: (id: string, updates: Partial<WorkflowNode>) => void;
   deleteNode: (id: string) => void;
   deleteNodes: (ids: string[]) => void;
+  duplicateNode: (id: string) => void;
 
   addEdge: (edge: WorkflowEdge) => void;
   updateEdge: (id: string, updates: Partial<WorkflowEdge>) => void;
@@ -38,8 +76,52 @@ interface WorkflowState {
   setSelectedEdges: (ids: string[]) => void;
   clearSelection: () => void;
 
+  // History actions
+  pushToHistory: () => void;
+  undo: () => void;
+  redo: () => void;
+  canUndo: () => boolean;
+  canRedo: () => boolean;
+
+  // Execution actions
+  startNodeExecution: (nodeId: string) => void;
+  finishNodeExecution: (nodeId: string) => void;
+  resetExecution: () => void;
+  setExecuting: (isExecuting: boolean) => void;
+
+  // Chat session actions
+  addChatSession: (session: ChatSession) => void;
+  addMessageToSession: (sessionId: string, message: ChatMessage) => void;
+  updateChatSession: (sessionId: string, updates: Partial<ChatSession>) => void;
+  clearChatSessions: () => void;
+
+  // PP-Detail panel actions
+  openPPDetail: (content: React.ReactNode) => void;
+  closePPDetail: () => void;
+
+  // Hover actions
+  setHoveredNodeId: (nodeId: string | null) => void;
+
+  // Save actions
+  setSaving: (saving: boolean) => void;
+  setAutoSaving: (autoSaving: boolean) => void;
+  markSaved: () => void;
+  markChanged: () => void;
+
+  // Validation actions
+  setValidationResult: (result: ValidationResult | null) => void;
+
   reset: () => void;
 }
+
+// Deep clone helper
+const deepClone = <T,>(obj: T): T => {
+  try {
+    return structuredClone(obj);
+  } catch {
+    return JSON.parse(JSON.stringify(obj));
+  }
+};
 
 export const useWorkflowStore = create<WorkflowState>()(
   immer((set, get) => ({
@@ -49,6 +131,37 @@ export const useWorkflowStore = create<WorkflowState>()(
     selectedNodes: [],
     selectedEdges: [],
 
+    // Execution state
+    isExecuting: false,
+    executingNodes: new Set<string>(),
+    completedNodes: new Set<string>(),
+
+    // Chat sessions
+    chatSessions: [],
+
+    // History
+    history: {
+      past: [],
+      future: [],
+    },
+
+    // Save state
+    saving: false,
+    autoSaving: false,
+    lastSaved: null,
+    lastAutoSaved: null,
+    hasUnsavedChanges: false,
+
+    // PP-Detail panel
+    isPPDetailOpen: false,
+    ppDetailContent: null,
+
+    // Hover state
+    hoveredNodeId: null,
+
+    // Validation
+    validationResult: null,
+
     setWorkflow: (workflow) => set((state) => {
       state.workflow = workflow;
       state.nodes = workflow.nodes;
@@ -56,10 +169,16 @@ export const useWorkflowStore = create<WorkflowState>()(
     }),
 
     addNode: (type, position) => set((state) => {
+      console.log('[addNode] Called with type:', type, 'position:', position);
+      console.log('[addNode] Current node count:', state.nodes.length);
+      get().pushToHistory();
       const newNode = createNodeByType(type, position);
+      console.log('[addNode] Created node:', newNode.id, newNode.type);
       state.nodes.push(newNode);
+      console.log('[addNode] New node count:', state.nodes.length);
       state.workflow.nodes = state.nodes;
       state.workflow.updatedOn = new Date().toISOString();
+      state.hasUnsavedChanges = true;
     }),
 
     updateNode: (id, updates) => set((state) => {
@@ -231,6 +350,172 @@ export const useWorkflowStore = create<WorkflowState>()(
       state.selectedEdges = [];
     }),
 
+    // Duplicate node
+    duplicateNode: (id) => set((state) => {
+      get().pushToHistory();
+      const node = state.nodes.find(n => n.id === id);
+      if (node) {
+        const newNode = deepClone(node);
+        newNode.id = uuidv4();
+        newNode.name = `${node.name}_copy`;
+        newNode.position = {
+          x: node.position.x + 50,
+          y: node.position.y + 50,
+        };
+        state.nodes.push(newNode);
+        state.workflow.nodes = state.nodes;
+        state.workflow.updatedOn = new Date().toISOString();
+        state.hasUnsavedChanges = true;
+      }
+    }),
+
+    // History management
+    pushToHistory: () => {
+      const { nodes, edges } = get();
+      const historyState: HistoryState = {
+        nodes: deepClone(nodes),
+        edges: deepClone(edges),
+      };
+
+      set((state) => {
+        state.history.past.push(historyState);
+        // Keep only last 10 states
+        if (state.history.past.length > 10) {
+          state.history.past = state.history.past.slice(-10);
+        }
+        // Clear future when new action is taken
+        state.history.future = [];
+      });
+    },
+
+    undo: () => set((state) => {
+      if (state.history.past.length === 0) return;
+
+      const current: HistoryState = {
+        nodes: deepClone(state.nodes),
+        edges: deepClone(state.edges),
+      };
+
+      const previous = state.history.past.pop()!;
+      state.history.future.push(current);
+
+      state.nodes = previous.nodes;
+      state.edges = previous.edges;
+      state.workflow.nodes = previous.nodes;
+      state.workflow.edges = previous.edges;
+      state.hasUnsavedChanges = true;
+    }),
+
+    redo: () => set((state) => {
+      if (state.history.future.length === 0) return;
+
+      const current: HistoryState = {
+        nodes: deepClone(state.nodes),
+        edges: deepClone(state.edges),
+      };
+
+      const next = state.history.future.pop()!;
+      state.history.past.push(current);
+
+      state.nodes = next.nodes;
+      state.edges = next.edges;
+      state.workflow.nodes = next.nodes;
+      state.workflow.edges = next.edges;
+      state.hasUnsavedChanges = true;
+    }),
+
+    canUndo: () => get().history.past.length > 0,
+    canRedo: () => get().history.future.length > 0,
+
+    // Execution state management
+    startNodeExecution: (nodeId) => set((state) => {
+      state.executingNodes.add(nodeId);
+    }),
+
+    finishNodeExecution: (nodeId) => set((state) => {
+      state.executingNodes.delete(nodeId);
+      state.completedNodes.add(nodeId);
+    }),
+
+    resetExecution: () => set((state) => {
+      state.isExecuting = false;
+      state.executingNodes.clear();
+      state.completedNodes.clear();
+    }),
+
+    setExecuting: (isExecuting) => set((state) => {
+      state.isExecuting = isExecuting;
+      if (!isExecuting) {
+        state.executingNodes.clear();
+        state.completedNodes.clear();
+      }
+    }),
+
+    // Chat session management
+    addChatSession: (session) => set((state) => {
+      state.chatSessions.push(session);
+    }),
+
+    addMessageToSession: (sessionId, message) => set((state) => {
+      const session = state.chatSessions.find(s => s.sessionId === sessionId);
+      if (session) {
+        session.messages.push(message);
+        session.lastUpdated = new Date();
+      }
+    }),
+
+    updateChatSession: (sessionId, updates) => set((state) => {
+      const session = state.chatSessions.find(s => s.sessionId === sessionId);
+      if (session) {
+        Object.assign(session, updates);
+      }
+    }),
+
+    clearChatSessions: () => set((state) => {
+      state.chatSessions = [];
+    }),
+
+    // PP-Detail panel management
+    openPPDetail: (content) => set((state) => {
+      state.isPPDetailOpen = true;
+      state.ppDetailContent = content;
+    }),
+
+    closePPDetail: () => set((state) => {
+      state.isPPDetailOpen = false;
+      state.ppDetailContent = null;
+    }),
+
+    // Hover state
+    setHoveredNodeId: (nodeId) => set((state) => {
+      state.hoveredNodeId = nodeId;
+    }),
+
+    // Save state management
+    setSaving: (saving) => set((state) => {
+      state.saving = saving;
+    }),
+
+    setAutoSaving: (autoSaving) => set((state) => {
+      state.autoSaving = autoSaving;
+    }),
+
+    markSaved: () => set((state) => {
+      state.hasUnsavedChanges = false;
+      state.lastSaved = new Date();
+      state.saving = false;
+      state.autoSaving = false;
+    }),
+
+    markChanged: () => set((state) => {
+      state.hasUnsavedChanges = true;
+    }),
+
+    // Validation
+    setValidationResult: (result) => set((state) => {
+      state.validationResult = result;
+    }),
+
     reset: () => set((state) => {
       const empty = createEmptyWorkflow();
       state.workflow = empty;
@@ -238,6 +523,20 @@ export const useWorkflowStore = create<WorkflowState>()(
       state.edges = empty.edges;
       state.selectedNodes = [];
       state.selectedEdges = [];
+      state.isExecuting = false;
+      state.executingNodes = new Set();
+      state.completedNodes = new Set();
+      state.chatSessions = [];
+      state.history = { past: [], future: [] };
+      state.saving = false;
+      state.autoSaving = false;
+      state.lastSaved = null;
+      state.lastAutoSaved = null;
+      state.hasUnsavedChanges = false;
+      state.isPPDetailOpen = false;
+      state.ppDetailContent = null;
+      state.hoveredNodeId = null;
+      state.validationResult = null;
     }),
   }))
 );
