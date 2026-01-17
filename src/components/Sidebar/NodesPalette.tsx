@@ -22,8 +22,11 @@ interface NodeCardProps {
 
 function NodeCard({ type, label, icon, description }: NodeCardProps) {
   const onDragStart = (event: React.DragEvent) => {
+    const dragId = `drag-${Date.now()}-${Math.random()}`;
     event.dataTransfer.setData('application/reactflow', type);
+    event.dataTransfer.setData('application/reactflow-dragid', dragId);
     event.dataTransfer.effectAllowed = 'move';
+    console.log('[NodeCard] Drag started, dragId:', dragId, 'type:', type);
   };
 
   return (

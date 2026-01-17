@@ -5,13 +5,15 @@ import { Badge } from '@/components/ui/badge';
 import type { WorkflowNode } from '@/types/workflow.types';
 import type { AgentNodeConfig } from '@/types/node.types';
 
-export const AgentNode = memo(({ data }: NodeProps<WorkflowNode>) => {
+export const AgentNode = memo(({ data, selected }: NodeProps<WorkflowNode>) => {
   const config = data.config as AgentNodeConfig;
   const tools = config?.tools || [];
   const model = config?.model;
 
   return (
-    <div className="px-4 py-3 shadow-lg rounded-lg bg-white border-2 border-blue-500 min-w-[280px]">
+    <div className={`px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[280px] ${
+      selected ? 'border-blue-600 ring-2 ring-blue-300' : 'border-blue-500'
+    }`}>
       <Handle
         type="target"
         position={Position.Left}

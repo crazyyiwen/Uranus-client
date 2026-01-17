@@ -12,10 +12,12 @@ interface NodeContextMenuProps {
 
 export function NodeContextMenu({ nodeId, x, y, onClose }: NodeContextMenuProps) {
   const menuRef = useRef<HTMLDivElement>(null);
-  const { duplicateNode, deleteNode, nodes } = useWorkflowStore();
+  const workflow = useWorkflowStore((state) => state.workflow);
+  const duplicateNode = useWorkflowStore((state) => state.duplicateNode);
+  const deleteNode = useWorkflowStore((state) => state.deleteNode);
   const { openConfigPanel } = useUIStore();
 
-  const node = nodes.find(n => n.id === nodeId);
+  const node = workflow.nodes.find(n => n.id === nodeId);
   const isDeletable = node?.deletable !== false;
 
   useEffect(() => {

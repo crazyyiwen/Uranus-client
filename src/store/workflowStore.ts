@@ -12,8 +12,6 @@ interface HistoryState {
 
 interface WorkflowState {
   workflow: WorkflowData;
-  nodes: WorkflowNode[];
-  edges: WorkflowEdge[];
   selectedNodes: string[];
   selectedEdges: string[];
 
@@ -30,13 +28,6 @@ interface WorkflowState {
     past: HistoryState[];
     future: HistoryState[];
   };
-
-  // Save state
-  saving: boolean;
-  autoSaving: boolean;
-  lastSaved: Date | null;
-  lastAutoSaved: Date | null;
-  hasUnsavedChanges: boolean;
 
   // PP-Detail panel (property panel detail overlay)
   isPPDetailOpen: boolean;
@@ -102,12 +93,6 @@ interface WorkflowState {
   // Hover actions
   setHoveredNodeId: (nodeId: string | null) => void;
 
-  // Save actions
-  setSaving: (saving: boolean) => void;
-  setAutoSaving: (autoSaving: boolean) => void;
-  markSaved: () => void;
-  markChanged: () => void;
-
   // Validation actions
   setValidationResult: (result: ValidationResult | null) => void;
 
@@ -123,11 +108,11 @@ const deepClone = <T,>(obj: T): T => {
   }
 };
 
+const initialWorkflow = createEmptyWorkflow();
+
 export const useWorkflowStore = create<WorkflowState>()(
   immer((set, get) => ({
-    workflow: createEmptyWorkflow(),
-    nodes: [],
-    edges: [],
+    workflow: initialWorkflow,
     selectedNodes: [],
     selectedEdges: [],
 
@@ -145,13 +130,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       future: [],
     },
 
-    // Save state
-    saving: false,
-    autoSaving: false,
-    lastSaved: null,
-    lastAutoSaved: null,
-    hasUnsavedChanges: false,
-
     // PP-Detail panel
     isPPDetailOpen: false,
     ppDetailContent: null,
@@ -163,95 +141,115 @@ export const useWorkflowStore = create<WorkflowState>()(
     validationResult: null,
 
     setWorkflow: (workflow) => set((state) => {
+      // Deduplicate nodes by ID
+      const uniqueNodes = Array.from(
+        new Map(workflow.nodes.map(node => [node.id, node])).values()
+      );
+
+      if (uniqueNodes.length !== workflow.nodes.length) {
+        console.warn(
+          `[setWorkflow] Found ${workflow.nodes.length - uniqueNodes.length} duplicate nodes. Removed duplicates.`
+        );
+      }
+
+      workflow.nodes = uniqueNodes;
       state.workflow = workflow;
-      state.nodes = workflow.nodes;
-      state.edges = workflow.edges;
     }),
 
     addNode: (type, position) => set((state) => {
       console.log('[addNode] Called with type:', type, 'position:', position);
-      console.log('[addNode] Current node count:', state.nodes.length);
+      console.log('[addNode] BEFORE - workflow.nodes.length:', state.workflow.nodes.length);
+      console.log('[addNode] BEFORE - workflow.nodes IDs:', state.workflow.nodes.map(n => `${n.type}:${n.id}`).join(', '));
+
       get().pushToHistory();
       const newNode = createNodeByType(type, position);
-      console.log('[addNode] Created node:', newNode.id, newNode.type);
-      state.nodes.push(newNode);
-      console.log('[addNode] New node count:', state.nodes.length);
-      state.workflow.nodes = state.nodes;
+      console.log('[addNode] Created new node:', newNode.id, newNode.type);
+
+      // Update workflow.nodes directly (ONLY source of truth)
+      state.workflow.nodes.push(newNode);
       state.workflow.updatedOn = new Date().toISOString();
-      state.hasUnsavedChanges = true;
+
+      console.log('[addNode] AFTER - workflow.nodes.length:', state.workflow.nodes.length);
+      console.log('[addNode] AFTER - workflow.nodes IDs:', state.workflow.nodes.map(n => `${n.type}:${n.id}`).join(', '));
     }),
 
     updateNode: (id, updates) => set((state) => {
-      const index = state.nodes.findIndex(n => n.id === id);
+      const index = state.workflow.nodes.findIndex(n => n.id === id);
       if (index !== -1) {
-        state.nodes[index] = { ...state.nodes[index], ...updates };
-        state.workflow.nodes = state.nodes;
+        state.workflow.nodes[index] = { ...state.workflow.nodes[index], ...updates };
         state.workflow.updatedOn = new Date().toISOString();
       }
     }),
 
     deleteNode: (id) => set((state) => {
-      const node = state.nodes.find(n => n.id === id);
+      console.log('[deleteNode] Called with id:', id);
+      console.log('[deleteNode] BEFORE - workflow.nodes.length:', state.workflow.nodes.length);
+      const node = state.workflow.nodes.find(n => n.id === id);
       if (node && !node.deletable) {
         console.warn('Cannot delete non-deletable node:', id);
         return;
       }
-      state.nodes = state.nodes.filter(n => n.id !== id);
-      state.edges = state.edges.filter(e => e.source !== id && e.target !== id);
-      state.workflow.nodes = state.nodes;
-      state.workflow.edges = state.edges;
+      // Update workflow.nodes and workflow.edges directly (ONLY source of truth)
+      state.workflow.nodes = state.workflow.nodes.filter(n => n.id !== id);
+      state.workflow.edges = state.workflow.edges.filter(e => e.source !== id && e.target !== id);
       state.workflow.updatedOn = new Date().toISOString();
+      console.log('[deleteNode] AFTER - workflow.nodes.length:', state.workflow.nodes.length);
+      console.log('[deleteNode] AFTER - workflow.nodes IDs:', state.workflow.nodes.map(n => `${n.type}:${n.id}`).join(', '));
     }),
 
     deleteNodes: (ids) => set((state) => {
+      console.log('[deleteNodes] Called with ids:', ids);
+      console.log('[deleteNodes] BEFORE - workflow.nodes.length:', state.workflow.nodes.length);
+      console.log('[deleteNodes] BEFORE - workflow.nodes IDs:', state.workflow.nodes.map(n => `${n.type}:${n.id}`).join(', '));
+
       const deletableIds = ids.filter(id => {
-        const node = state.nodes.find(n => n.id === id);
+        const node = state.workflow.nodes.find(n => n.id === id);
         return node?.deletable !== false;
       });
-      state.nodes = state.nodes.filter(n => !deletableIds.includes(n.id));
-      state.edges = state.edges.filter(e =>
+
+      console.log('[deleteNodes] Deletable IDs after filter:', deletableIds);
+
+      state.workflow.nodes = state.workflow.nodes.filter(n => !deletableIds.includes(n.id));
+      state.workflow.edges = state.workflow.edges.filter(e =>
         !deletableIds.includes(e.source) && !deletableIds.includes(e.target)
       );
-      state.workflow.nodes = state.nodes;
-      state.workflow.edges = state.edges;
       state.workflow.updatedOn = new Date().toISOString();
+
+      console.log('[deleteNodes] AFTER - workflow.nodes.length:', state.workflow.nodes.length);
+      console.log('[deleteNodes] AFTER - workflow.nodes IDs:', state.workflow.nodes.map(n => `${n.type}:${n.id}`).join(', '));
     }),
 
     addEdge: (edge) => set((state) => {
       // Check if edge already exists
-      const exists = state.edges.some(e =>
+      const exists = state.workflow.edges.some(e =>
         e.source === edge.source && e.target === edge.target
       );
       if (!exists) {
-        state.edges.push(edge);
-        state.workflow.edges = state.edges;
+        state.workflow.edges.push(edge);
         state.workflow.updatedOn = new Date().toISOString();
       }
     }),
 
     updateEdge: (id, updates) => set((state) => {
-      const index = state.edges.findIndex(e => e.id === id);
+      const index = state.workflow.edges.findIndex(e => e.id === id);
       if (index !== -1) {
-        state.edges[index] = { ...state.edges[index], ...updates };
-        state.workflow.edges = state.edges;
+        state.workflow.edges[index] = { ...state.workflow.edges[index], ...updates };
         state.workflow.updatedOn = new Date().toISOString();
       }
     }),
 
     deleteEdge: (id) => set((state) => {
-      state.edges = state.edges.filter(e => e.id !== id);
-      state.workflow.edges = state.edges;
+      state.workflow.edges = state.workflow.edges.filter(e => e.id !== id);
       state.workflow.updatedOn = new Date().toISOString();
     }),
 
     deleteEdges: (ids) => set((state) => {
-      state.edges = state.edges.filter(e => !ids.includes(e.id));
-      state.workflow.edges = state.edges;
+      state.workflow.edges = state.workflow.edges.filter(e => !ids.includes(e.id));
       state.workflow.updatedOn = new Date().toISOString();
     }),
 
     updateNodeConfig: (id, config) => set((state) => {
-      const node = state.nodes.find(n => n.id === id);
+      const node = state.workflow.nodes.find(n => n.id === id);
       if (node) {
         node.config = { ...node.config, ...config };
         state.workflow.updatedOn = new Date().toISOString();
@@ -259,7 +257,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     }),
 
     updateNodeProperties: (id, properties) => set((state) => {
-      const node = state.nodes.find(n => n.id === id);
+      const node = state.workflow.nodes.find(n => n.id === id);
       if (node) {
         node.properties = { ...node.properties, ...properties };
         state.workflow.updatedOn = new Date().toISOString();
@@ -267,7 +265,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     }),
 
     addToolToNode: (nodeId, tool) => set((state) => {
-      const node = state.nodes.find(n => n.id === nodeId);
+      const node = state.workflow.nodes.find(n => n.id === nodeId);
       if (node && 'tools' in node.config) {
         if (!node.config.tools) {
           node.config.tools = [];
@@ -290,27 +288,25 @@ export const useWorkflowStore = create<WorkflowState>()(
               sourceType: node.type,
             },
           };
-          state.edges.push(edge);
-          state.workflow.edges = state.edges;
+          state.workflow.edges.push(edge);
         }
         state.workflow.updatedOn = new Date().toISOString();
       }
     }),
 
     removeToolFromNode: (nodeId, toolId) => set((state) => {
-      const node = state.nodes.find(n => n.id === nodeId);
+      const node = state.workflow.nodes.find(n => n.id === nodeId);
       if (node && 'tools' in node.config) {
         node.config.tools = node.config.tools?.filter((t: Tool) => t._id !== toolId) || [];
 
         // Remove associated handoff edge if exists
-        state.edges = state.edges.filter(e => e.data?.toolId !== toolId);
-        state.workflow.edges = state.edges;
+        state.workflow.edges = state.workflow.edges.filter(e => e.data?.toolId !== toolId);
         state.workflow.updatedOn = new Date().toISOString();
       }
     }),
 
     updateToolInNode: (nodeId, toolId, updates) => set((state) => {
-      const node = state.nodes.find(n => n.id === nodeId);
+      const node = state.workflow.nodes.find(n => n.id === nodeId);
       if (node && 'tools' in node.config) {
         const tool = node.config.tools?.find((t: Tool) => t._id === toolId);
         if (tool) {
@@ -353,7 +349,7 @@ export const useWorkflowStore = create<WorkflowState>()(
     // Duplicate node
     duplicateNode: (id) => set((state) => {
       get().pushToHistory();
-      const node = state.nodes.find(n => n.id === id);
+      const node = state.workflow.nodes.find(n => n.id === id);
       if (node) {
         const newNode = deepClone(node);
         newNode.id = uuidv4();
@@ -362,19 +358,17 @@ export const useWorkflowStore = create<WorkflowState>()(
           x: node.position.x + 50,
           y: node.position.y + 50,
         };
-        state.nodes.push(newNode);
-        state.workflow.nodes = state.nodes;
+        state.workflow.nodes.push(newNode);
         state.workflow.updatedOn = new Date().toISOString();
-        state.hasUnsavedChanges = true;
       }
     }),
 
     // History management
     pushToHistory: () => {
-      const { nodes, edges } = get();
+      const workflow = get().workflow;
       const historyState: HistoryState = {
-        nodes: deepClone(nodes),
-        edges: deepClone(edges),
+        nodes: deepClone(workflow.nodes),
+        edges: deepClone(workflow.edges),
       };
 
       set((state) => {
@@ -392,36 +386,30 @@ export const useWorkflowStore = create<WorkflowState>()(
       if (state.history.past.length === 0) return;
 
       const current: HistoryState = {
-        nodes: deepClone(state.nodes),
-        edges: deepClone(state.edges),
+        nodes: deepClone(state.workflow.nodes),
+        edges: deepClone(state.workflow.edges),
       };
 
       const previous = state.history.past.pop()!;
       state.history.future.push(current);
 
-      state.nodes = previous.nodes;
-      state.edges = previous.edges;
       state.workflow.nodes = previous.nodes;
       state.workflow.edges = previous.edges;
-      state.hasUnsavedChanges = true;
     }),
 
     redo: () => set((state) => {
       if (state.history.future.length === 0) return;
 
       const current: HistoryState = {
-        nodes: deepClone(state.nodes),
-        edges: deepClone(state.edges),
+        nodes: deepClone(state.workflow.nodes),
+        edges: deepClone(state.workflow.edges),
       };
 
       const next = state.history.future.pop()!;
       state.history.past.push(current);
 
-      state.nodes = next.nodes;
-      state.edges = next.edges;
       state.workflow.nodes = next.nodes;
       state.workflow.edges = next.edges;
-      state.hasUnsavedChanges = true;
     }),
 
     canUndo: () => get().history.past.length > 0,
@@ -491,26 +479,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       state.hoveredNodeId = nodeId;
     }),
 
-    // Save state management
-    setSaving: (saving) => set((state) => {
-      state.saving = saving;
-    }),
-
-    setAutoSaving: (autoSaving) => set((state) => {
-      state.autoSaving = autoSaving;
-    }),
-
-    markSaved: () => set((state) => {
-      state.hasUnsavedChanges = false;
-      state.lastSaved = new Date();
-      state.saving = false;
-      state.autoSaving = false;
-    }),
-
-    markChanged: () => set((state) => {
-      state.hasUnsavedChanges = true;
-    }),
-
     // Validation
     setValidationResult: (result) => set((state) => {
       state.validationResult = result;
@@ -519,8 +487,6 @@ export const useWorkflowStore = create<WorkflowState>()(
     reset: () => set((state) => {
       const empty = createEmptyWorkflow();
       state.workflow = empty;
-      state.nodes = empty.nodes;
-      state.edges = empty.edges;
       state.selectedNodes = [];
       state.selectedEdges = [];
       state.isExecuting = false;
@@ -528,11 +494,6 @@ export const useWorkflowStore = create<WorkflowState>()(
       state.completedNodes = new Set();
       state.chatSessions = [];
       state.history = { past: [], future: [] };
-      state.saving = false;
-      state.autoSaving = false;
-      state.lastSaved = null;
-      state.lastAutoSaved = null;
-      state.hasUnsavedChanges = false;
       state.isPPDetailOpen = false;
       state.ppDetailContent = null;
       state.hoveredNodeId = null;

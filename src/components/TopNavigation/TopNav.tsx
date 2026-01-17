@@ -1,8 +1,8 @@
-import { Play, Save, FileJson, Settings, Variable, Layout, LogOut, User, Undo, Redo } from 'lucide-react';
+import { Play, FileJson, Settings, Variable, Layout, LogOut, User, Undo, Redo, FilePlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,34 +13,42 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useUIStore } from '@/store/uiStore';
 import { useWorkflowStore } from '@/store/workflowStore';
-import { useStorageStore } from '@/store/storageStore';
 import { useAuthStore } from '@/store/authStore';
-import { formatDistanceToNow } from '@/utils/dateUtils';
+import { createEmptyWorkflow } from '@/utils/nodeDefaults';
 
 export function TopNav() {
   const navigate = useNavigate();
   const { activeTab, setActiveTab } = useUIStore();
   const {
     workflow,
-    hasUnsavedChanges,
-    lastSaved,
     undo,
     redo,
     canUndo,
     canRedo,
-    markSaved,
+    setWorkflow,
   } = useWorkflowStore();
-  const { saveDraft, publish } = useStorageStore();
   const { user, logout } = useAuthStore();
 
-  const handleSave = () => {
-    saveDraft(workflow);
-    markSaved();
+  const handleNewWorkflow = () => {
+    const confirmed = window.confirm(
+      'Are you sure you want to create a new workflow? Current workflow will be cleared.'
+    );
+    if (!confirmed) return;
+
+    const newWorkflow = createEmptyWorkflow();
+    setWorkflow(newWorkflow);
   };
 
-  const handlePublish = () => {
-    publish(workflow);
-    markSaved();
+  const handleSave = () => {
+    // TODO: Implement database save
+    console.log('Save to database:', workflow);
+    alert('Database save not implemented yet');
+  };
+
+  const handleRun = () => {
+    // TODO: Implement workflow execution
+    console.log('Run workflow:', workflow);
+    alert('Workflow execution not implemented yet');
   };
 
   const handleLogout = () => {
@@ -54,16 +62,10 @@ export function TopNav() {
       <div className="flex items-center gap-3">
         <h1 className="text-lg font-semibold">
           {workflow.displayName || 'Untitled Workflow'}
-          {hasUnsavedChanges && <span className="text-red-500 ml-1">*</span>}
         </h1>
         <Badge variant={workflow.status === 'published' ? 'default' : 'secondary'}>
           {workflow.status === 'published' ? 'Published' : 'Draft'}
         </Badge>
-        {lastSaved && (
-          <span className="text-xs text-muted-foreground">
-            Saved {formatDistanceToNow(lastSaved.toISOString())}
-          </span>
-        )}
       </div>
 
       {/* Center: Tabs */}
@@ -112,14 +114,11 @@ export function TopNav() {
           </Button>
         </div>
 
-        <Button variant="outline" size="sm" onClick={handleSave}>
-          <Save className="h-4 w-4 mr-2" />
-          Save
+        <Button variant="outline" size="sm" onClick={handleNewWorkflow} title="Create New Workflow">
+          <FilePlus className="h-4 w-4 mr-2" />
+          New
         </Button>
-        <Button variant="default" size="sm" onClick={handlePublish}>
-          Publish
-        </Button>
-        <Button variant="ghost" size="sm">
+        <Button variant="ghost" size="sm" onClick={handleRun}>
           <Play className="h-4 w-4 mr-2" />
           Run
         </Button>

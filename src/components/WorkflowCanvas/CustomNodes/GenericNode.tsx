@@ -29,12 +29,14 @@ const nodeConfig: Record<NodeType, { icon: any; color: string; bgColor: string; 
   script: { icon: FileCode, color: 'text-orange-600', bgColor: 'bg-orange-500', label: 'Script' },
 };
 
-export const GenericNode = memo(({ data }: NodeProps<WorkflowNode>) => {
+export const GenericNode = memo(({ data, selected }: NodeProps<WorkflowNode>) => {
   const config = nodeConfig[data.type] || nodeConfig.agent;
   const Icon = config.icon;
 
   return (
-    <div className="px-4 py-3 shadow-lg rounded-lg bg-white border-2 border-gray-300 min-w-[200px]">
+    <div className={`px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[200px] ${
+      selected ? 'border-blue-500 ring-2 ring-blue-300' : 'border-gray-300'
+    }`}>
       <Handle
         type="target"
         position={Position.Left}

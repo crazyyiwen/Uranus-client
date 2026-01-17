@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Uranus Workflow Storage</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #dc2626;
+        }
+        .success {
+            background: #10b981;
+        }
+        .success:hover {
+            background: #059669;
+        }
+        #result {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .info {
+            background: #dbeafe;
+            color: #1e40af;
+        }
+        .warning {
+            background: #fef3c7;
+            color: #92400e;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear Workflow Storage</h1>
+        <p>This will clear all localStorage data for the Uranus workflow app and fix duplicate node issues.</p>
+
+        <h3>Current Storage:</h3>
+        <pre id="storage-info">Loading...</pre>
+
+        <button onclick="clearStorage()">Clear All Storage</button>
+        <button class="success" onclick="location.href='http://localhost:5173'">Go to App</button>
+
+        <div id="result"></div>
+    </div>
+
+    <script>
+        function showStorageInfo() {
+            const draft = localStorage.getItem('workflow_draft');
+            const published = localStorage.getItem('workflow_published');
+            let info = '';
+
+            if (draft) {
+                try {
+                    const data = JSON.parse(draft);
+                    info += `Draft Workflow:\n- Name: ${data.name}\n- Nodes: ${data.nodes.length}\n- Edges: ${data.edges.length}\n\n`;
+                } catch (e) {
+                    info += 'Draft: (corrupted data)\n\n';
+                }
+            } else {
+                info += 'Draft: (empty)\n\n';
+            }
+
+            if (published) {
+                try {
+                    const data = JSON.parse(published);
+                    info += `Published Workflow:\n- Name: ${data.name}\n- Nodes: ${data.nodes.length}\n- Edges: ${data.edges.length}\n`;
+                } catch (e) {
+                    info += 'Published: (corrupted data)';
+                }
+            } else {
+                info += 'Published: (empty)';
+            }
+
+            document.getElementById('storage-info').textContent = info || 'No data found';
+        }
+
+        function clearStorage() {
+            const keys = Object.keys(localStorage);
+            const workflowKeys = keys.filter(k => k.includes('workflow'));
+
+            workflowKeys.forEach(key => {
+                localStorage.removeItem(key);
+            });
+
+            const result = document.getElementById('result');
+            result.style.display = 'block';
+            result.className = 'info';
+            result.innerHTML = `<strong>✅ Success!</strong><br>Cleared ${workflowKeys.length} items:<br>- ${workflowKeys.join('<br>- ') || 'None'}`;
+
+            setTimeout(() => {
+                showStorageInfo();
+            }, 500);
+        }
+
+        showStorageInfo();
+    </script>
+</body>
+</html>

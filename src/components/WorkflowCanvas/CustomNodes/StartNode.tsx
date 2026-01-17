@@ -3,9 +3,11 @@ import { Handle, Position, NodeProps } from '@xyflow/react';
 import { Play } from 'lucide-react';
 import type { WorkflowNode } from '@/types/workflow.types';
 
-export const StartNode = memo(({ data }: NodeProps<WorkflowNode>) => {
+export const StartNode = memo(({ data, selected }: NodeProps<WorkflowNode>) => {
   return (
-    <div className="px-4 py-3 shadow-lg rounded-lg bg-white border-2 border-blue-500 min-w-[200px]">
+    <div className={`px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[200px] ${
+      selected ? 'border-blue-600 ring-2 ring-blue-300' : 'border-blue-500'
+    }`}>
       <div className="flex items-center gap-2">
         <div className="p-2 rounded-md bg-blue-500 text-white">
           <Play className="h-4 w-4" />

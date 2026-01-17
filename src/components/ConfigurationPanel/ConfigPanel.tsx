@@ -44,9 +44,10 @@ const nodeIcons: Record<NodeType, { icon: any; color: string; bgColor: string }>
 
 export function ConfigPanel() {
   const { configPanelOpen, selectedNodeId, closeConfigPanel } = useUIStore();
-  const { nodes, deleteNode } = useWorkflowStore();
+  const workflow = useWorkflowStore((state) => state.workflow);
+  const deleteNode = useWorkflowStore((state) => state.deleteNode);
 
-  const selectedNode = nodes.find(n => n.id === selectedNodeId);
+  const selectedNode = workflow.nodes.find(n => n.id === selectedNodeId);
 
   if (!selectedNode) return null;
 

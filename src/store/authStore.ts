@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
 interface User {
   id: string;
@@ -11,23 +10,23 @@ interface User {
 interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
+  token: string | null;
 
   // Actions
   login: (emailOrUsername: string, password: string) => Promise<boolean>;
   signup: (email: string, username: string, password: string) => Promise<boolean>;
   logout: () => void;
   getCurrentUser: () => User | null;
+  getToken: () => string | null;
 }
 
 const API_BASE_URL = 'http://localhost:3316';
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      user: null,
-      isAuthenticated: false,
-
-      login: async (emailOrUsername: string, password: string) => {
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  user: null,
+  isAuthenticated: false,
+  token: null,
+  login: async (emailOrUsername: string, password: string) => {
         try {
           const response = await fetch(`${API_BASE_URL}/login`, {
             method: 'POST',
@@ -56,12 +55,10 @@ export const useAuthStore = create<AuthState>()(
             createdAt: data.createdAt || new Date().toISOString(),
           };
 
-          // Store token if returned by backend
-          if (data.token) {
-            localStorage.setItem('auth_token', data.token);
-          }
+          // Store token in memory only (no localStorage)
+          const token = data.token || null;
 
-          set({ user, isAuthenticated: true });
+          set({ user, isAuthenticated: true, token });
           return true;
         } catch (error) {
           console.error('Login error:', error);
@@ -98,12 +95,10 @@ export const useAuthStore = create<AuthState>()(
             createdAt: data.createdAt || new Date().toISOString(),
           };
 
-          // Store token if returned by backend
-          if (data.token) {
-            localStorage.setItem('auth_token', data.token);
-          }
+          // Store token in memory only (no localStorage)
+          const token = data.token || null;
 
-          set({ user, isAuthenticated: true });
+          set({ user, isAuthenticated: true, token });
           return true;
         } catch (error) {
           console.error('Signup error:', error);
@@ -111,18 +106,15 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
-      logout: () => {
-        // Remove token from localStorage
-        localStorage.removeItem('auth_token');
-        set({ user: null, isAuthenticated: false });
-      },
+  logout: () => {
+    set({ user: null, isAuthenticated: false, token: null });
+  },
 
-      getCurrentUser: () => {
-        return get().user;
-      },
-    }),
-    {
-      name: 'auth-storage',
-    }
-  )
-);
+  getCurrentUser: () => {
+    return get().user;
+  },
+
+  getToken: () => {
+    return get().token;
+  },
+}));

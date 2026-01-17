@@ -3,9 +3,11 @@ import { Handle, Position, NodeProps } from '@xyflow/react';
 import { FileOutput } from 'lucide-react';
 import type { WorkflowNode } from '@/types/workflow.types';
 
-export const OutputNode = memo(({ data }: NodeProps<WorkflowNode>) => {
+export const OutputNode = memo(({ data, selected }: NodeProps<WorkflowNode>) => {
   return (
-    <div className="px-4 py-3 shadow-lg rounded-lg bg-white border-2 border-gray-400 min-w-[150px]">
+    <div className={`px-4 py-3 shadow-lg rounded-lg bg-white border-2 min-w-[150px] ${
+      selected ? 'border-blue-500 ring-2 ring-blue-300' : 'border-gray-400'
+    }`}>
       <Handle
         type="target"
         position={Position.Left}

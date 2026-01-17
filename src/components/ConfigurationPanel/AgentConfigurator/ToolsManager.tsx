@@ -54,7 +54,7 @@ export function ToolsManager({ nodeId }: ToolsManagerProps) {
     setNewToolData({ name: '', description: '', type: 'mcp', targetNodeId: '' });
   };
 
-  const allNodes = useWorkflowStore((state) => state.nodes);
+  const allNodes = useWorkflowStore((state) => state.workflow.nodes);
   const availableTargetNodes = allNodes.filter(n => n.id !== nodeId && n.type !== 'start');
 
   return (
